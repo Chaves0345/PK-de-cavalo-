@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Elite Chat | Pro</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root { 
+            --primary: #6200ea; --accent: #00d4ff; --bg: #010103; 
+            --glass: rgba(255, 255, 255, 0.08); --text: #ffffff; 
+            --neon: 0 0 15px rgba(98, 0, 234, 0.5);
+            --xp-bar: linear-gradient(90deg, #8e2de2, #4a00e0);
+        }
+
+        [data-theme="matrix"] { --primary: #00ff41; --accent: #008f11; --bg: #000; --neon: 0 0 15px rgba(0, 255, 65, 0.5); }
+        [data-theme="cyber"] { --primary: #ff007f; --accent: #00f2ff; --bg: #0d001a; --neon: 0 0 15px rgba(255, 0, 127, 0.5); }
+        [data-theme="inferno"] { --primary: #ff1e1e; --accent: #ff8000; --bg: #0a0000; --neon: 0 0 15px rgba(255, 30, 30, 0.5); }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+        body, html { height: 100%; width: 100%; background: var(--bg); color: var(--text); overflow: hidden; position: fixed; }
+
+        #starCanvas { position: fixed; inset: 0; z-index: 1; pointer-events: none; }
+
+        .app-container { position: relative; z-index: 10; height: 100%; width: 100%; }
+
+        .screen { 
+            position: absolute; inset: 0; padding: 25px; padding-top: 60px;
+            display: none; flex-direction: column; 
+        }
+        .screen-active { display: flex !important; animation: fadeIn 0.4s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
+
+        /* UI ELEMENTS */
+        input, textarea { 
+            width: 100%; background: var(--glass); border: 1px solid rgba(255,255,255,0.1); 
+            padding: 16px; border-radius: 18px; color: white; outline: none; margin-bottom: 12px;
+            backdrop-filter: blur(10px);
+        }
+        button { 
+            border: none; background: linear-gradient(135deg, var(--primary), var(--accent)); 
+            padding: 16px; border-radius: 18px; color: white; font-weight: bold; 
+            cursor: pointer; box-shadow: var(--neon); transition: 0.3s;
+        }
+        button:active { transform: scale(0.95); }
+
+        /* CHAT BUBBLES */
+        #chat-msgs { flex: 1; overflow-y: auto; padding: 10px 0; display: flex; flex-direction: column; }
+        .msg-bubble { margin: 8px 0; max-width: 85%; display: flex; align-items: flex-end; gap: 10px; animation: msgSlide 0.3s ease; }
+        @keyframes msgSlide { from { opacity: 0; transform: translateY(5px); } }
+        .pfp-msg { width: 35px; height: 35px; border-radius: 50%; border: 1.5px solid var(--primary); object-fit: cover; }
+        .msg-content { padding: 12px 16px; border-radius: 20px; background: var(--glass); font-size: 14px; line-height: 1.4; position: relative; min-width: 80px; }
+        .me { align-self: flex-end; flex-direction: row-reverse; }
+        .me .msg-content { background: var(--primary); box-shadow: var(--neon); }
+        
+        /* NOVO: Estilo para o Horário */
+        .msg-time { display: block; font-size: 10px; opacity: 0.6; text-align: right; margin-top: 4px; font-weight: 300; }
+
+        /* NAV BAR */
+        .nav-bar { 
+            position: fixed; bottom: -100px; left: 0; width: 100%; height: 85px; 
+            background: rgba(0,0,0,0.85); backdrop-filter: blur(20px);
+            display: flex; justify-content: space-around; align-items: center; 
+            transition: 0.5s; z-index: 100; border-top: 1px solid rgba(255,255,255,0.05);
+        }
+        .nav-bar.show { bottom: 0; }
+        .nav-btn { font-size: 24px; opacity: 0.4; transition: 0.3s; padding: 10px; }
+        .nav-btn.active { opacity: 1; color: var(--primary); text-shadow: var(--neon); }
+
+        /* MODAIS */
+        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 5000; display: none; align-items: center; justify-content: center; backdrop-filter: blur(8px); }
+        .modal-box { width: 85%; max-width: 350px; background: #111; border: 1px solid var(--primary); border-radius: 25px; padding: 25px; box-shadow: var(--neon); }
+
+        /* XP BAR (Original) */
+        .xp-container { width: 100%; height: 8px; background: rgba(255,255,255,0.1); border-radius: 10px; margin: 10px 0; overflow: hidden; }
+        .xp-fill { height: 100%; background: var(--xp-bar); width: 0%; transition: 1s ease; }
+    </style>
+</head>
+<body data-theme="default">
+
+<canvas id="starCanvas"></canvas>
+
+<div class="app-container">
+    <div id="login-screen" class="screen screen-active">
+        <center style="margin-top:15vh">
+            <h1 style="font-size:50px; text-shadow: var(--neon); letter-spacing:8px">ELITE</h1>
+            <p style="opacity:0.3; margin-bottom:50px; font-size:12px">CONEXÃO SEGURA</p>
+            <div style="max-width:320px; width:100%">
+                <input type="email" id="loginEmail" placeholder="E-mail de Agente">
+                <input type="password" id="loginPass" placeholder="Senha de Acesso">
+                <button id="btnEntrar" style="width:100%">ENTRAR NO TERMINAL</button>
+                <p onclick="navigateTo('register-screen')" style="margin-top:25px; opacity:0.5; font-size:14px">Novo por aqui? Criar Identidade</p>
+            </div>
+        </center>
+    </div>
+
+    <div id="register-screen" class="screen">
+        <h2>Nova Identidade</h2>
+        <center style="margin: 20px 0;">
+            <div onclick="document.getElementById('regPfpInput').click()" style="position:relative; width:110px; height:110px; cursor:pointer">
+                <img id="regPfpPreview" src="https://via.placeholder.com/150" style="width:100%; height:100%; border-radius:50%; object-fit:cover; border:2px solid var(--primary)">
+                <div style="position:absolute; bottom:0; right:0; background:var(--primary); padding:8px; border-radius:50%">📷</div>
+            </div>
+            <input type="file" id="regPfpInput" hidden accept="image/*">
+        </center>
+        <input type="text" id="regNome" placeholder="Seu Codinome">
+        <input type="email" id="regEmail" placeholder="E-mail">
+        <input type="password" id="regPass" placeholder="Senha Forte">
+        <button id="btnConfirmarReg" style="width:100%">CRIAR AGENTE</button>
+        <button onclick="navigateTo('login-screen')" style="background:none; margin-top:10px">Cancelar</button>
+    </div>
+
+    <div id="home-screen" class="screen">
+        <h1 style="margin-bottom:20px">Elite Hub</h1>
+        <div onclick="navigateTo('chat-screen')" style="background:var(--glass); padding:35px; border-radius:25px; border-left:6px solid var(--primary); margin-bottom:15px">
+            <strong style="font-size:18px">🌍 HUB GLOBAL</strong><br>
+            <small style="opacity:0.5">Comunicação aberta e segura</small>
+        </div>
+        <div onclick="nextTheme()" style="background:var(--glass); padding:20px; border-radius:20px; border:1px solid rgba(255,255,255,0.05)">
+            🎨 <strong id="themeLabel">Tema: Roxo Cósmico</strong><br>
+            <small style="opacity:0.4">Toque para mudar o estilo</small>
+        </div>
+    </div>
+
+    <div id="profile-screen" class="screen">
+        <h1>Meu Perfil</h1>
+        <center>
+            <div style="position:relative; width:130px; height:130px; margin: 25px 0;">
+                <img id="profImg" src="https://via.placeholder.com/150" style="width:100%; height:100%; border-radius:50%; border:3px solid var(--primary); object-fit:cover">
+                <button onclick="document.getElementById('profPfpInput').click()" style="position:absolute; bottom:0; right:0; background:var(--primary); padding:10px; border-radius:50%; border:none; color:white">📂</button>
+            </div>
+            <input type="file" id="profPfpInput" hidden accept="image/*">
+            <h2 id="displayNome">Carregando...</h2>
+            <div class="xp-container"><div id="xpFill" class="xp-fill"></div></div>
+            <small id="xpText" style="opacity:0.5">Nível de Agente: 0 XP</small>
+        </center>
+        <div style="margin-top:20px">
+            <input type="text" id="profNomeInput" placeholder="Nome">
+            <textarea id="profBio" rows="2" placeholder="Bio do Agente..."></textarea>
+            <button id="btnSalvarPerfil" style="width:100%">SINCRONIZAR DADOS</button>
+        </div>
+        <button id="btnSair" style="margin-top:auto; background:none; color:#ff1e1e">LOGOUT DO SISTEMA</button>
+    </div>
+
+    <div id="chat-screen" class="screen" style="padding-bottom:100px; padding-top:20px">
+        <div style="display:flex; align-items:center; gap:15px; margin-bottom:15px">
+            <button onclick="navigateTo('home-screen')" style="background:none; font-size:25px">←</button>
+            <strong>GLOBAL TERMINAL</strong>
+        </div>
+        <div id="chat-msgs"></div>
+        <div style="position:fixed; bottom:20px; left:20px; right:20px; display:flex; gap:10px; z-index:200">
+            <button onclick="document.getElementById('chatMedia').click()" style="width:50px; background:var(--glass); border-radius:15px">📎</button>
+            <input type="file" id="chatMedia" hidden accept="image/*">
+            <input type="text" id="msgInput" placeholder="Enviar comando..." style="margin:0; background:rgba(0,0,0,0.8); border-radius:15px">
+            <button id="btnEnviar" style="width:60px; border-radius:15px">➤</button>
+        </div>
+    </div>
+
+    <div class="nav-bar" id="main-nav">
+        <div class="nav-btn" id="nav-home" onclick="navigateTo('home-screen')">🏠</div>
+        <div class="nav-btn" id="nav-profile" onclick="navigateTo('profile-screen')">👤</div>
+    </div>
+</div>
+
+<div id="modal-msg" class="overlay" onclick="this.style.display='none'">
+    <div class="modal-box" onclick="event.stopPropagation()">
+        <h3 style="margin-bottom:15px">Ações de Mensagem</h3>
+        <textarea id="edit-text" style="display:none"></textarea>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+            <button id="btn-edit-mode">✏️ Editar Mensagem</button>
+            <button id="btn-confirm-edit" style="display:none">✅ Salvar Alteração</button>
+            <button id="btn-del-msg" style="background:#ff1e1e">🗑️ Apagar Permanente</button>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getFirestore, doc, setDoc, getDoc, collection, addDoc, query, onSnapshot, orderBy, serverTimestamp, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyANKLtlqp8lb1En3SoONAoQHPa3bENTNG4",
+        authDomain: "chat-61862.firebaseapp.com",
+        projectId: "chat-61862",
+        storageBucket: "chat-61862.firebasestorage.app",
+        messagingSenderId: "843380257397",
+        appId: "1:843380257397:web:d349c321c12b6f9aa0be3c"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    let currentUid, currentUser, activeMsgId, pressTimer;
+
+    // --- ESTRELAS ORIGINAIS ---
+    const canvas = document.getElementById('starCanvas');
+    const ctx = canvas.getContext('2d');
+    let stars = [];
+    function initStars() {
+        canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+        stars = [];
+        for (let i = 0; i < 150; i++) stars.push({ 
+            x: Math.random()*canvas.width, 
+            y: Math.random()*canvas.height, 
+            size: Math.random()*1.5, 
+            speed: Math.random()*0.4, 
+            z: Math.random()*2 
+        });
+    }
+    function animateStars() {
+        ctx.clearRect(0,0,canvas.width,canvas.height); ctx.fillStyle = "#fff";
+        stars.forEach(s => {
+            ctx.globalAlpha = 0.5 + (s.z / 4);
+            ctx.beginPath(); ctx.arc(s.x, s.y, s.size * s.z, 0, Math.PI*2); ctx.fill();
+            s.y -= s.speed; if(s.y < 0) s.y = canvas.height;
+        });
+        requestAnimationFrame(animateStars);
+    }
+    initStars(); animateStars();
+    window.onresize = initStars;
+
+    // --- NAVEGAÇÃO ---
+    window.navigateTo = (id) => {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('screen-active'));
+        document.getElementById(id).classList.add('screen-active');
+        const nav = document.getElementById('main-nav');
+        nav.classList.toggle('show', id === 'home-screen' || id === 'profile-screen');
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        if(id === 'home-screen') document.getElementById('nav-home').classList.add('active');
+        if(id === 'profile-screen') document.getElementById('nav-profile').classList.add('active');
+    };
+
+    // --- TEMAS ---
+    const themes = ['default', 'matrix', 'cyber', 'inferno'];
+    const names = ['Roxo Cósmico', 'Matrix Green', 'Cyber Pink', 'Inferno Red'];
+    let tIdx = 0;
+    window.nextTheme = () => {
+        tIdx = (tIdx + 1) % themes.length;
+        document.body.dataset.theme = themes[tIdx];
+        document.getElementById('themeLabel').innerText = `Tema: ${names[tIdx]}`;
+    };
+
+    // --- AUTH & LOGIN ---
+    document.getElementById('btnEntrar').onclick = async () => {
+        const e = document.getElementById('loginEmail').value.trim();
+        const p = document.getElementById('loginPass').value;
+        if(!e || !p) return alert("Preencha os campos!");
+        try { await signInWithEmailAndPassword(auth, e, p); } catch { alert("Falha na autenticação!"); }
+    };
+
+    onAuthStateChanged(auth, async (user) => {
+        if(user) {
+            currentUid = user.uid;
+            const ref = doc(db, "usuarios", user.uid);
+            const snap = await getDoc(ref);
+            if(!snap.exists()) await setDoc(ref, { nome: user.email.split('@')[0], pfp: "", bio: "Agente Elite", xp: 10 });
+            
+            onSnapshot(ref, d => {
+                currentUser = d.data();
+                document.getElementById('displayNome').innerText = currentUser.nome;
+                document.getElementById('profNomeInput').value = currentUser.nome;
+                document.getElementById('profBio').value = currentUser.bio || "";
+                if(currentUser.pfp) document.getElementById('profImg').src = currentUser.pfp;
+                document.getElementById('xpFill').style.width = (currentUser.xp || 0) + "%";
+                document.getElementById('xpText').innerText = `Nível de Agente: ${currentUser.xp || 0} XP`;
+                if(document.getElementById('login-screen').classList.contains('screen-active')) navigateTo('home-screen');
+            });
+            loadChat();
+        } else { navigateTo('login-screen'); }
+    });
+
+    // --- CHAT ATUALIZADO COM HORÁRIO ---
+    function loadChat() {
+        onSnapshot(query(collection(db, "mensagens"), orderBy("createdAt", "asc")), snaps => {
+            const area = document.getElementById('chat-msgs');
+            area.innerHTML = "";
+            snaps.forEach(d => {
+                const m = d.data();
+                const isMe = m.uid === currentUid;
+                
+                // Formatação do Horário
+                let horarioStr = "";
+                if (m.createdAt) {
+                    const data = m.createdAt.toDate();
+                    horarioStr = data.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                }
+
+                const div = document.createElement('div');
+                div.className = `msg-bubble ${isMe ? 'me' : ''}`;
+                div.innerHTML = `
+                    <img src="${m.pfp || 'https://via.placeholder.com/150'}" class="pfp-msg">
+                    <div class="msg-content">
+                        <small style="color:var(--accent); font-weight:bold; font-size:10px">${m.usuario}</small><br>
+                        ${m.media ? `<img src="${m.media}" style="width:100%; border-radius:12px; margin-top:5px">` : m.texto}
+                        <span class="msg-time">${horarioStr}</span>
+                    </div>`;
+                
+                if(isMe) {
+                    div.onmousedown = div.ontouchstart = () => pressTimer = setTimeout(() => openActions(d.id, m.texto), 700);
+                    div.onmouseup = div.ontouchend = () => clearTimeout(pressTimer);
+                }
+                area.appendChild(div);
+            });
+            area.scrollTop = area.scrollHeight;
+        });
+    }
+
+    const sendMsg = async (txt = "", med = null) => {
+        if(!txt && !med) return;
+        await addDoc(collection(db, "mensagens"), {
+            texto: txt, media: med, uid: currentUid, usuario: currentUser.nome, pfp: currentUser.pfp || "", createdAt: serverTimestamp()
+        });
+    };
+
+    document.getElementById('btnEnviar').onclick = () => {
+        const i = document.getElementById('msgInput');
+        if(i.value.trim()){ sendMsg(i.value); i.value = ""; }
+    };
+
+    document.getElementById('chatMedia').onchange = (e) => {
+        const file = e.target.files[0];
+        const reader = new FileReader();
+        reader.onload = (ev) => sendMsg("", ev.target.result);
+        reader.readAsDataURL(file);
+    };
+
+    // --- MODAL ACTIONS ---
+    function openActions(id, text) {
+        activeMsgId = id;
+        document.getElementById('modal-msg').style.display = 'flex';
+        document.getElementById('edit-text').value = text;
+        document.getElementById('edit-text').style.display = 'none';
+        document.getElementById('btn-confirm-edit').style.display = 'none';
+        document.getElementById('btn-edit-mode').style.display = 'block';
+    }
+
+    document.getElementById('btn-edit-mode').onclick = () => {
+        document.getElementById('edit-text').style.display = 'block';
+        document.getElementById('btn-confirm-edit').style.display = 'block';
+        document.getElementById('btn-edit-mode').style.display = 'none';
+    };
+
+    document.getElementById('btn-confirm-edit').onclick = async () => {
+        await updateDoc(doc(db, "mensagens", activeMsgId), { texto: document.getElementById('edit-text').value });
+        document.getElementById('modal-msg').style.display = 'none';
+    };
+
+    document.getElementById('btn-del-msg').onclick = async () => {
+        if(confirm("Apagar permanentemente?")) {
+            await deleteDoc(doc(db, "mensagens", activeMsgId));
+            document.getElementById('modal-msg').style.display = 'none';
+        }
+    };
+
+    // --- PROFILE & REGISTER ---
+    const getB64 = (file, cb) => { const r = new FileReader(); r.onload = (e) => cb(e.target.result); r.readAsDataURL(file); };
+    
+    document.getElementById('regPfpInput').onchange = (e) => getB64(e.target.files[0], (u) => document.getElementById('regPfpPreview').src = u);
+    
+    document.getElementById('btnConfirmarReg').onclick = async () => {
+        const e = document.getElementById('regEmail').value, p = document.getElementById('regPass').value, n = document.getElementById('regNome').value;
+        const img = document.getElementById('regPfpPreview').src;
+        try {
+            const res = await createUserWithEmailAndPassword(auth, e, p);
+            await setDoc(doc(db, "usuarios", res.user.uid), { nome: n, pfp: img, bio: "Agente Elite", xp: 10 });
+        } catch { alert("Erro ao registrar!"); }
+    };
+
+    document.getElementById('profPfpInput').onchange = (e) => getB64(e.target.files[0], async (u) => {
+        document.getElementById('profImg').src = u;
+        await updateDoc(doc(db, "usuarios", currentUid), { pfp: u });
+    });
+
+  
